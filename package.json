@@ -1,0 +1,13 @@
+{
+    "name": "commit-add-list",
+    "version": "0.1.0",
+    "private": "true",
+    "main": "./dist/index.js",
+    "dependencies": {
+        "@notionhq/client": "^1.0.4",
+        "request": "^2.88.2"
+    },
+    "devDependencies": {
+        "@types/node": "^17.0.23"
+    }
+}
