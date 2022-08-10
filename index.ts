@@ -1,5 +1,3 @@
-import { nextTick } from "process";
-
 const koa = require('koa');
 const koaRouter = require('koa-router');
 const views = require('koa-views');
@@ -30,39 +28,66 @@ router.get('/', async (ctx) => {
     });
 });
 
-router.get('/callback', async (ctx, next) => {
+router.get('/callback', (ctx, next) => {
     let {code} = ctx.query;
     
-    await request({
-        url: 'https://github.com/login/oauth/access_token',
-        method:'post',
-        headers:{
-            Accept:'application/json'
-        },
-        form : {
-            client_id:process.env.GITHUB_CLIENTID,
-            client_secret:process.env.GITHUB_CLIENTSECRET,
-            code : code,
-            redirect_uri:'http://localhost:8090/callback'
-        }
-    }, async function(err, res, body){
-        try {
-            if(res.statusCode == 200){
-                body = JSON.parse(body);
-                token_obj.token = body.access_token;
-                token_obj.type = body.token_type;
-            }
-        } catch (error) {
-            console.error(err);
-        }
-    });
+    return new Promise((resolve, reject) => {
+        request(
+            {
+                url: 'https://github.com/login/oauth/access_token',
+                method:'post',
+                headers:{
+                    Accept:'application/json',
+                    'user-agent': 'node.js'
+                },
+                form : {
+                    client_id:process.env.GITHUB_CLIENTID,
+                    client_secret:process.env.GITHUB_CLIENTSECRET,
+                    code : code,
+                    redirect_uri:'http://localhost:8090/callback'
+                }
+            }, function(err, response, body){
+                if(err){
+                    console.error(err);
+                    reject(err);
+                }
 
-    await ctx.redirect('/dashboard');
+                if(response.statusCode == 200){
+                    body = JSON.parse(body);
+                    token_obj.token = body.access_token;
+                    token_obj.type = body.type;
+                    ctx.redirect('/dashboard');
+                    resolve(true);
+                }
+            }
+        );
+    })
 });
 
-router.get('/dashboard', async (ctx) => {
-    await ctx.render('dashboard', {
+router.get('/dashboard', ctx => {
 
+    return new Promise((resolve, reject) => {
+        request(
+            {
+                url: 'https://api.github.com/repos/seolbee/commit-calendar-api/commits',
+                method:'GET',
+                headers:{
+                    Accept:'application/json',
+                    Authorization: `${token_obj.type} ${token_obj.token}`,
+                    'user-agent': 'node.js'
+                }
+            },
+            function(err, response, body){
+                if(err){
+                    console.error(err);
+                    reject(ctx.render('error', {'error' : err}));
+                }
+
+                if(response.statusCode == 200){
+                    resolve(ctx.render('dashboard', {'commit_list':body}));
+                }
+            }
+        );
     });
 })
 
