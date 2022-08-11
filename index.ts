@@ -1,3 +1,5 @@
+import Token from './model/auth/token';
+
 const koa = require('koa');
 const koaRouter = require('koa-router');
 const views = require('koa-views');
@@ -10,85 +12,121 @@ require('dotenv').config();
 const app = new koa();
 const router = new koaRouter();
 
-const token_obj = {
-    token:'',
-    type:''
-};
+const git_token = new Token();
+const notion_token = new Token();
 
 app.use(views(path.join(__dirname, 'views'), { map : { html : 'nunjucks' }}));
 nunjucks.configure('views', {
     koa:app
 });
 
-router.get('/', async (ctx) => {
+router.get('/', async ctx => {
     await ctx.render('index', {
-        clientId : process.env.GITHUB_CLIENTID,
-        user: process.env.GITHUB_USER,
-        email: process.env.GITHUB_EMAIL
+        git_clientId : process.env.GITHUB_CLIENTID,
+        git_user: process.env.GITHUB_USER,
+        git_email: process.env.GITHUB_EMAIL,
+        notion_clientId:process.env.NOTION_CLIENTID,
+        notion_user:process.env.NOTION_USER,
+        notion_redirect:'http://localhost:8090/callback?type=notion'
     });
 });
 
-router.get('/callback', (ctx, next) => {
-    let {code} = ctx.query;
+router.get('/callback', ctx => {
+    let {type, code} = ctx.query;
     
-    return new Promise((resolve, reject) => {
-        request(
-            {
-                url: 'https://github.com/login/oauth/access_token',
-                method:'post',
-                headers:{
-                    Accept:'application/json',
-                    'user-agent': 'node.js'
-                },
-                form : {
-                    client_id:process.env.GITHUB_CLIENTID,
-                    client_secret:process.env.GITHUB_CLIENTSECRET,
-                    code : code,
-                    redirect_uri:'http://localhost:8090/callback'
+    if(type == 'github'){
+        return new Promise((resolve, reject) => {
+            request(
+                {
+                    url: 'https://github.com/login/oauth/access_token',
+                    method:'post',
+                    headers:{
+                        Accept:'application/json',
+                        'user-agent': 'node.js'
+                    },
+                    form : {
+                        client_id:process.env.GITHUB_CLIENTID,
+                        client_secret:process.env.GITHUB_CLIENTSECRET,
+                        code : code,
+                        redirect_uri:'http://localhost:8090/callback?type=github'
+                    }
+                }, 
+                function(err, response, body){
+                    if(err){
+                        console.error(err);
+                        reject(err);
+                    }
+    
+                    if(response.statusCode == 200){
+                        body = JSON.parse(body);
+                        git_token.setToken(body);
+                        ctx.redirect('/dashboard');
+                        resolve(true);
+                    }
                 }
-            }, function(err, response, body){
-                if(err){
-                    console.error(err);
-                    reject(err);
+            );
+        });
+    } else {
+        return new Promise((resolve, reject) => {
+            request(
+                {
+                    url: 'https://api.notion.com/v1/oauth/token',
+                    method:'post',
+                    headers:{
+                        Accept:'application/json',
+                        'user-agent': 'node.js',
+                        Authorization:`Basic ${process.env.NOTION_CLIENTID}${process.env.NOTION_CLIENTSECRET}`
+                    },
+                    form : {
+                        grant_type:'authorization_code',
+                        code : code,
+                        redirect_uri:'http://localhost:8090/callback?type=notion'
+                    }
+                }, 
+                function(err, response, body){
+                    if(err){
+                        console.error(err);
+                        reject(err);
+                    }
+    
+                    if(response.statusCode == 200){
+                        body = JSON.parse(body);
+                        notion_token.setToken(body);
+                        ctx.redirect('/dashboard');
+                        resolve(true);
+                    }
                 }
-
-                if(response.statusCode == 200){
-                    body = JSON.parse(body);
-                    token_obj.token = body.access_token;
-                    token_obj.type = body.type;
-                    ctx.redirect('/dashboard');
-                    resolve(true);
-                }
-            }
-        );
-    })
+            );
+        });
+    }
 });
 
-router.get('/dashboard', ctx => {
+router.get('/dashboard', async ctx => {
 
-    return new Promise((resolve, reject) => {
-        request(
-            {
-                url: 'https://api.github.com/repos/seolbee/commit-calendar-api/commits',
-                method:'GET',
-                headers:{
-                    Accept:'application/json',
-                    Authorization: `${token_obj.type} ${token_obj.token}`,
-                    'user-agent': 'node.js'
-                }
-            },
-            function(err, response, body){
-                if(err){
-                    console.error(err);
-                    reject(ctx.render('error', {'error' : err}));
-                }
+    // return new Promise((resolve, reject) => {
+    //     request(
+    //         {
+    //             url: 'https://api.github.com/repos/seolbee/commit-calendar-api/commits',
+    //             method:'GET',
+    //             headers:{
+    //                 Accept:'application/json',
+    //                 Authorization: git_token.token,
+    //                 'user-agent': 'node.js'
+    //             }
+    //         },
+    //         function(err, response, body){
+    //             if(err){
+    //                 console.error(err);
+    //                 reject(ctx.render('error', {'error' : err}));
+    //             }
 
-                if(response.statusCode == 200){
-                    resolve(ctx.render('dashboard', {'commit_list':body}));
-                }
-            }
-        );
-    });
+    //             if(response.statusCode == 200){
+    //                 resolve(ctx.render('dashboard', {'commit_list':body}));
+    //             }
+    //         }
+    //     );
+    // });
+    await ctx.render('dashboard');
 })
 
 app.use(router.routes());
