@@ -27,12 +27,13 @@ router.get('/', async ctx => {
         git_email: process.env.GITHUB_EMAIL,
         notion_clientId:process.env.NOTION_CLIENTID,
         notion_user:process.env.NOTION_USER,
-        notion_redirect:'http://localhost:8090/callback?type=notion'
+        notion_redirect:'http://localhost:8090/callback/notion'
     });
 });
 
-router.get('/callback', ctx => {
-    let {type, code} = ctx.query;
+router.get('/callback/:type', ctx => {
+    let {code} = ctx.query;
+    let {type} = ctx.params;
     
     if(type == 'github'){
         return new Promise((resolve, reject) => {
@@ -48,7 +49,7 @@ router.get('/callback', ctx => {
                         client_id:process.env.GITHUB_CLIENTID,
                         client_secret:process.env.GITHUB_CLIENTSECRET,
                         code : code,
-                        redirect_uri:'http://localhost:8090/callback?type=github'
+                        redirect_uri:'http://localhost:8090/callback/github'
                     }
                 }, 
                 function(err, response, body){
@@ -71,25 +72,29 @@ router.get('/callback', ctx => {
             request(
                 {
                     url: 'https://api.notion.com/v1/oauth/token',
-                    method:'post',
+                    method:'POST',
+                    auth:{
+                        username:process.env.NOTION_CLIENTID,
+                        password:process.env.NOTION_CLIENTSECRET
+                    },
                     headers:{
-                        Accept:'application/json',
-                        'user-agent': 'node.js',
-                        Authorization:`Basic ${process.env.NOTION_CLIENTID}${process.env.NOTION_CLIENTSECRET}`
+                        'Content-Type' :'application/json'
                     },
                     form : {
                         grant_type:'authorization_code',
-                        code : code,
-                        redirect_uri:'http://localhost:8090/callback?type=notion'
+                        code: code,
+                        redirect_uri:'http://localhost:8090/callback/notion'
                     }
                 }, 
                 function(err, response, body){
+                    console.log(response.statusCode);
                     if(err){
                         console.error(err);
                         reject(err);
                     }
     
                     if(response.statusCode == 200){
+                        console.log(body);
                         body = JSON.parse(body);
                         notion_token.setToken(body);
                         ctx.redirect('/dashboard');
