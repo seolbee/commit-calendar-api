@@ -6,9 +6,9 @@ class Token{
         return `${this.type} ${this.value}`;
     }
 
-    setToken(obj){
-        this.value = obj;
-        this.type = obj;
+    setToken(access_token, type){
+        this.value = access_token;
+        this.type = type;
     }
 }
 
