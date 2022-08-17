@@ -3,7 +3,7 @@ class Token{
     private type = '';
 
     get token(){
-        return `${this.type} ${this.value}`;
+        return `${this.value}`;
     }
 
     setToken(access_token, type){
